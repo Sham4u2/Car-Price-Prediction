@@ -4,9 +4,23 @@
 
 This project aims to predict car prices using an XGBoost Regressor model. It involves comprehensive exploratory data analysis (EDA) on a dataset of used cars, feature engineering, model training, and hyperparameter tuning. The trained model is then deployed as a Streamlit web application, allowing users to input car details and receive a price prediction.
 
+## Results
+
+Trained on the Cars24 used-car dataset (6,306 rows after removing 116 outliers).
+
+| Model | R² | MAE (₹) | MSE |
+|---|---|---|---|
+| XGBoost, before tuning | 0.9231 | 53,553.47 | 7,038,522,927.46 |
+| XGBoost, after tuning | **0.9321** | **48,064.84** | 6,218,260,056.69 |
+
+Best parameters after tuning with RandomizedSearchCV: subsample 0.8, n_estimators 500, max_depth 7, learning_rate 0.05, gamma 0.2, colsample_bytree 0.6.
+
+The trained model is deployed as a Streamlit web app (see app.py) — enter car details and get a price prediction.
+
 ## Table of Contents
 
 - [Project Overview](#project-overview)
+- [Results](#results)
 - [Table of Contents](#table-of-contents)
 - [Features](#features)
 - [Installation](#installation)
@@ -118,4 +132,4 @@ The project relies on the following Python libraries, as listed in `requirements
 
 ## Contact
 
-For any questions or inquiries, please reach out. 
+For any questions or inquiries, please reach out.
