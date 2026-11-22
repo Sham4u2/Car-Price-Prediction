@@ -1,135 +1,111 @@
 # Car Price Prediction with XGBoost
 
-## Project Overview
+Predict the price of a used car from its brand, model, age, kilometers driven, fuel type, and other details — using an XGBoost Regressor trained on the Cars24 used-car dataset.
 
-This project aims to predict car prices using an XGBoost Regressor model. It involves comprehensive exploratory data analysis (EDA) on a dataset of used cars, feature engineering, model training, and hyperparameter tuning. The trained model is then deployed as a Streamlit web application, allowing users to input car details and receive a price prediction.
+## Results (honest, retrained 23 November 2026)
 
-## Results
-
-Trained on the Cars24 used-car dataset (6,306 rows after removing 116 outliers).
+Trained on 6,306 rows (see Dataset below). Test set: 1,262 cars (20% split, `random_state=42`).
 
 | Model | R² | MAE (₹) | MSE |
 |---|---|---|---|
-| XGBoost, before tuning | 0.9231 | 53,553.47 | 7,038,522,927.46 |
-| XGBoost, after tuning | **0.9321** | **48,064.84** | 6,218,260,056.69 |
+| XGBoost, before tuning | 0.9170 | 54,272.38 | 7,598,180,352.00 |
+| XGBoost, after tuning | **0.9247** | **51,717.17** | **6,894,040,064.00** |
 
 Best parameters after tuning with RandomizedSearchCV: subsample 0.8, n_estimators 500, max_depth 7, learning_rate 0.05, gamma 0.2, colsample_bytree 0.6.
 
-The trained model is deployed as a Streamlit web app (see app.py) — enter car details and get a price prediction.
+What this means in plain words: on unseen cars, the tuned model explains about 92% of the price differences, and its predictions are off by about ₹51,717 on average.
 
-## Table of Contents
+## What was wrong before — and what changed
 
-- [Project Overview](#project-overview)
-- [Results](#results)
-- [Table of Contents](#table-of-contents)
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Dataset](#dataset)
-- [Model Details](#model-details)
-- [File Structure](#file-structure)
-- [Presentations](#presentations)
-- [Dependencies](#dependencies)
-- [Contact](#contact)
+The first version of this project reported R² 0.9321 and MAE ₹48,064.84. Those numbers were **not honest**, so they have been removed.
 
-## Features
+The problem was a feature called `price_per_km`, calculated as `price / kilometerdriven`. The target the model had to predict was `price` itself — so the model was given part of the answer as an input. That is called **data leakage**, and it inflated the score.
 
-- **Data Loading & Preprocessing**: Handles missing values, duplicates, and outlier detection.
-- **Exploratory Data Analysis (EDA)**: Visualizations to understand data distributions, correlations, and trends.
-- **Feature Engineering**: Creation of new features like `car_age`, `price_per_km`, `is_1st_owner`, and `is_automatic`.
-- **Label Encoding**: Categorical features are transformed using Label Encoding, with encoders saved for consistent inference.
-- **XGBoost Regressor**: A robust gradient boosting model for accurate price prediction.
-- **Hyperparameter Tuning**: Utilizes `RandomizedSearchCV` to optimize model performance.
-- **Streamlit Web Application**: An interactive user interface for real-time car price predictions.
+The fix, done in the retrain on 23 November 2026:
 
-## Installation
+- **Removed `price_per_km` completely** — it is not used anywhere now.
+- **Added `kilometerdriven` as a real feature** — the actual kilometers the car has driven, which a buyer would know.
+- **Fixed `app.py`**: it no longer asks the user to enter a Price to predict a price. It asks only for car details (brand, model, year, kilometers driven, owner number, and so on). It also no longer loads the model from a hard-coded Windows path — it loads `Car_Price_Prediction.pkl` from the same folder as the app, so it works on any computer.
+- Everything else was kept the same as the original pipeline, so the new numbers are a fair comparison: same cleaning, same 80/20 split, same tuning search.
 
-To set up the project locally, follow these steps:
+## Dataset
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd CAR\ PRICE\ PREDICTION
-   ```
+`cars24_20221210.csv` — used cars listed on Cars24.
 
-2. **Create a virtual environment (recommended)**:
-   ```bash
-   python -m venv venv
-   .\venv\Scripts\activate  # On Windows
-   source venv/bin/activate  # On macOS/Linux
-   ```
+- Original rows: 6,437
+- Duplicates removed: 15
+- Outliers removed (price, z-score > 3): 116
+- Rows used for training and testing: **6,306**
+- Train: 5,044 rows, Test: 1,262 rows
 
-3. **Install the dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Preprocessing
 
-4. **Ensure the model and encoders are available**:
-   The `Car_Price_Prediction.pkl` model file and the `encoders/` directory (containing label encoder classes) are crucial for the `app.py` to run. These files are generated during the execution of `Car24_Price_Prediction.ipynb`. Please ensure they are present in your project directory.
+- Missing `transmission` and `bodytype` values filled with the most common value (mode).
+- Duplicates removed.
+- Unneeded columns dropped: `url`, `createdDate`, `storename`.
+- Negative `discountprice` values set to 0.
+- Outliers in `price` removed with a z-score threshold of 3.
+- Categorical columns label-encoded: `name`, `make`, `model`, `city`, `fueltype`, `transmission`, `bodytype`, `registrationcity`, `registrationstate`. The encoder classes are saved in `encoders/` so the app can use the same encoding.
 
-## Usage
+## Feature Engineering
 
-### Running the Streamlit Application
+- `car_age` = current year − manufacturing year
+- `is_1st_owner` = 1 if the car has had only one owner, else 0
+- `is_automatic` = 1 if transmission is Automatic, else 0
+- `kilometerdriven` used directly as a feature
 
-To launch the web application, navigate to the project root directory in your terminal and run:
+Features used by the model (13 in total): `name`, `make`, `model`, `city`, `fueltype`, `transmission`, `bodytype`, `registrationcity`, `registrationstate`, `car_age`, `kilometerdriven`, `is_1st_owner`, `is_automatic`.
+
+Target: `price`.
+
+## Model Details
+
+- **Model:** XGBoost Regressor (`random_state=42`)
+- **Hyperparameter tuning:** `RandomizedSearchCV`, 20 iterations, 3-fold cross-validation, scoring by negative mean squared error, `random_state=42`
+- **Output:** the trained model is saved as `Car_Price_Prediction.pkl`
+
+## How to Run
+
+### 1. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+`requirements.txt` includes `streamlit`, `pandas`, `xgboost`, and `joblib`.
+
+### 2. Train the model
+
+Open and run `Car24_Price_Prediction.ipynb`. This creates `Car_Price_Prediction.pkl` and the `encoders/` folder in the project directory.
+
+### 3. Run the Streamlit app
 
 ```bash
 streamlit run app.py
 ```
 
-The application will open in your web browser, allowing you to input car details and get price predictions.
-
-### Exploring the Jupyter Notebook
-
-The `Car24_Price_Prediction.ipynb` notebook contains the full data analysis, preprocessing, feature engineering, model training, and evaluation steps. You can open and run it using Jupyter Notebook or JupyterLab:
-
-```bash
-jupyter notebook Car24_Price_Prediction.ipynb
-# or
-jupyter lab Car24_Price_Prediction.ipynb
-```
-
-## Dataset
-
-The project uses the `cars24_20221210.csv` dataset, which contains information about used cars. This dataset is used for training the predictive model.
-
-## Model Details
-
-- **Model Type**: XGBoost Regressor
-- **Training**: The model is trained on a processed version of the `cars24_20221210.csv` dataset.
-- **Hyperparameter Tuning**: `RandomizedSearchCV` is used to find optimal hyperparameters for the XGBoost model to maximize predictive accuracy.
-- **Output**: The trained model is saved as `Car_Price_Prediction.pkl`.
+Enter the car details and click **Predict Price**. You do not need to enter a price — that is what the app predicts.
 
 ## File Structure
 
 ```
-CAR PRICE PREDICTION/
+Car-Price-Prediction/
   ├── app.py                            # Streamlit web application for prediction
   ├── Car24_Price_Prediction.ipynb      # Jupyter Notebook with data analysis, training, and evaluation
   ├── cars24_20221210.csv               # Raw dataset
   ├── requirements.txt                  # Python dependencies
-  ├── Car_Price_Prediction.pkl          # Trained XGBoost model (generated by notebook)
-  └── encoders/                         # Directory containing saved LabelEncoder classes (generated by notebook)
-      ├── name_classes.pkl
-      ├── make_classes.pkl
-      └── ... (other categorical features)
+  ├── Car_Price_Prediction.pkl          # Trained XGBoost model (generated by the notebook)
+  ├── encoders/                         # Saved LabelEncoder classes (generated by the notebook)
+  ├── CarPricePrediction_Final_Presentation.pptx
+  └── LICENSE
 ```
 
-## Presentations
+## Limitations
 
-- `Car24_Price_Prediction (JUPYTER NOTEBOOK PRESENTATION).mp4`: Video presentation of the Jupyter Notebook.
-- `Car24_Price_Prediction (VS CODE PRESENTATION).mp4`: Video presentation demonstrating the project within VS Code.
-- `CarPricePrediction_Final_Presentation.pptx`: Final presentation slides.
-
-## Dependencies
-
-The project relies on the following Python libraries, as listed in `requirements.txt`:
-
-- `streamlit`: For building the interactive web application.
-- `pandas`: For data manipulation and analysis.
-- `xgboost`: For the gradient boosting regression model.
-- `joblib`: For saving and loading the trained model and label encoders.
+- The model was trained only on Cars24 listings from this dataset, so it may not predict well for cars, brands, or cities very different from those in the data.
+- An average error of about ₹51,717 means some predictions will be much closer and some further off — use the prediction as a guide, not an exact price.
 
 ## Contact
 
-For any questions or inquiries, please reach out.
+- GitHub: https://github.com/Sham4u2
+- LinkedIn: https://www.linkedin.com/in/shamiulla4u
